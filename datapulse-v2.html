@@ -1,0 +1,2001 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataPulse CSV — Analisis, Konversi & Peta Tematik</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- PapaParse (CSV Parser) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- Tabulator (Interactive DataGrid) -->
+  <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.5/dist/css/tabulator_simple.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.2.5/dist/js/tabulator.min.js"></script>
+
+  <!-- SheetJS (Excel Export) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Chart.js (Visualisasi Grafik) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- Leaflet.js (Peta Geografis & Poligon Tematik) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    .tabulator {
+      border: 1px solid #e2e8f0;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      background-color: #ffffff;
+    }
+    .tabulator .tabulator-header {
+      background-color: #f8fafc;
+      border-bottom: 2px solid #e2e8f0;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input {
+      border: 1px solid #cbd5e1;
+      border-radius: 0.375rem;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      font-weight: 400;
+      margin-top: 4px;
+    }
+    .tabulator-row .tabulator-cell.cell-edited {
+      background-color: #fef9c3 !important;
+      border-bottom: 2px solid #eab308;
+    }
+    #leafletMap {
+      height: 520px;
+      width: 100%;
+      border-radius: 0.75rem;
+      z-index: 1;
+    }
+    .leaflet-legend {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 10px 12px;
+      border-radius: 0.65rem;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+      border: 1px solid #e2e8f0;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #1e293b;
+      min-width: 165px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen font-sans">
+
+  <!-- Navbar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+          DP
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">DataPulse CSV</h1>
+          <p class="text-xs text-slate-500">Profiling, DataGrid, Konversi & Peta Tematik</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnSample" type="button" class="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition">
+          Muat Data Contoh
+        </button>
+        <label for="csvInput" class="cursor-pointer px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition">
+          Upload CSV
+        </label>
+        <input id="csvInput" type="file" accept=".csv,text/csv" class="hidden" />
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Dropzone Upload -->
+    <section id="dropZone" class="bg-white border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-xl p-8 text-center transition cursor-pointer">
+      <div class="max-w-md mx-auto space-y-2">
+        <div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto text-xl font-bold">
+          CSV
+        </div>
+        <h2 class="text-base font-semibold text-slate-800">Tarik & Lepas file CSV di sini, atau klik untuk memilih file</h2>
+        <p class="text-xs text-slate-500">Mendukung pemisah koma (,), titik koma (;), atau tab. Diproses 100% lokal di browser Anda.</p>
+      </div>
+    </section>
+
+    <!-- Toast Notification -->
+    <div id="toastBox" class="hidden fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg transition"></div>
+
+    <!-- Main Workspace -->
+    <div id="workspace" class="hidden space-y-6">
+
+      <!-- KPI Summary Cards -->
+      <section class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p class="text-xs text-slate-500 font-medium">Total Baris</p>
+          <p id="statTotalRows" class="text-2xl font-bold text-slate-900 mt-1">0</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p class="text-xs text-slate-500 font-medium">Baris Aktif (Terfilter)</p>
+          <p id="statActiveRows" class="text-2xl font-bold text-indigo-600 mt-1">0</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p class="text-xs text-slate-500 font-medium">Kolom Tampil / Total</p>
+          <p id="statTotalCols" class="text-2xl font-bold text-slate-900 mt-1">0 / 0</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p class="text-xs text-slate-500 font-medium">Sel Diedit</p>
+          <p id="statEditedCells" class="text-2xl font-bold text-amber-600 mt-1">0</p>
+        </div>
+      </section>
+
+      <!-- Navigation Tabs & Export Toolbar -->
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div class="flex flex-wrap gap-2">
+          <button type="button" data-tab="tabGrid" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white shadow-sm">
+            1. DataGrid & Analisis Kolom
+          </button>
+          <button type="button" data-tab="tabChart" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-100">
+            2. Visualisasi Grafik (Chart.js)
+          </button>
+          <button type="button" data-tab="tabMap" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-100">
+            3. Peta Tematik & Poligon (Leaflet)
+          </button>
+        </div>
+
+        <!-- Export & Copy Toolbar -->
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="btnCopyClipboard" type="button" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
+            Salin Tabel
+          </button>
+          <button id="btnExportXlsx" type="button" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition">
+            Ekspor Excel (.xlsx)
+          </button>
+          <button id="btnExportJson" type="button" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition">
+            Ekspor JSON
+          </button>
+          <button id="btnExportCsv" type="button" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition">
+            Ekspor CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 1: DATAGRID & COLUMN PROFILING -->
+      <section id="tabGrid" class="tab-panel space-y-6">
+
+        <!-- Column Profiling Table -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 class="text-sm font-bold text-slate-800">Analisis & Statistik Kolom (Data Profiling)</h3>
+              <p class="text-xs text-slate-500">Klik pilihan <strong>Tipe Data</strong> untuk mengubah kolom kode (seperti NIK, ID, Kode Pos) dari <strong>Angka</strong> menjadi <strong>Teks</strong>.</p>
+            </div>
+            <button id="btnToggleProfile" type="button" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+              Sembunyikan
+            </button>
+          </div>
+          <div id="profileContainer" class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-100 text-slate-600 border-b border-slate-200">
+                  <th class="py-2.5 px-4 font-semibold">Nama Kolom</th>
+                  <th class="py-2.5 px-4 font-semibold">Tipe Data (Ubah Manual)</th>
+                  <th class="py-2.5 px-4 font-semibold">Kosong</th>
+                  <th class="py-2.5 px-4 font-semibold">Nilai Unik</th>
+                  <th class="py-2.5 px-4 font-semibold">Min</th>
+                  <th class="py-2.5 px-4 font-semibold">Rata-rata</th>
+                  <th class="py-2.5 px-4 font-semibold">Maks</th>
+                </tr>
+              </thead>
+              <tbody id="profileTableBody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- DataGrid Controls & Table -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <!-- Left Controls -->
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="globalSearch" type="text" placeholder="Cari di semua kolom..." class="w-56 sm:w-64 px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <button id="btnResetFilter" type="button" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200">
+                Reset Filter
+              </button>
+              <button id="btnAddRow" type="button" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">
+                + Tambah Baris
+              </button>
+            </div>
+
+            <!-- Right Controls -->
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- Decimal Separator Toggle -->
+              <div class="inline-flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200" title="Ubah format tampilan desimal & pemisah ribuan">
+                <span class="text-[11px] font-semibold text-slate-500 px-2">Desimal:</span>
+                <button id="btnDecDot" type="button" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-indigo-700 shadow-sm transition">
+                  Titik (1,234.5)
+                </button>
+                <button id="btnDecComma" type="button" class="px-2.5 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+                  Koma (1.234,5)
+                </button>
+              </div>
+
+              <!-- Column Visibility Dropdown -->
+              <div class="relative" id="colDropdownWrapper">
+                <button id="btnColDropdown" type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5">
+                  <span id="colDropdownLabel">Kolom (0/0)</span>
+                  <span class="text-[10px]">&#9662;</span>
+                </button>
+                <div id="colDropdownMenu" class="hidden absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg z-40 p-3 space-y-2">
+                  <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span class="text-xs font-bold text-slate-800">Tampilkan Kolom</span>
+                    <button id="btnShowAllCols" type="button" class="text-[11px] font-semibold text-indigo-600 hover:underline">
+                      Tampilkan Semua
+                    </button>
+                  </div>
+                  <div id="colCheckboxList" class="max-h-60 overflow-y-auto space-y-1.5 pr-1"></div>
+                </div>
+              </div>
+
+              <button id="btnJumpVisualize" type="button" class="px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition">
+                Visualisasikan &rarr;
+              </button>
+            </div>
+          </div>
+
+          <p class="text-xs text-slate-500">
+            Tips: Klik header kolom untuk mengurutkan (sorting), ketik pada kotak di bawah header untuk memfilter, atau klik langsung pada sel mana pun untuk mengedit nilainya.
+          </p>
+
+          <div id="dataGrid"></div>
+        </div>
+      </section>
+
+      <!-- TAB 2: CHART.JS VISUALIZATION -->
+      <section id="tabChart" class="tab-panel hidden space-y-5">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Visualisasi Data Aktif (Chart.js)</h3>
+              <p class="text-xs text-slate-500">Grafik otomatis mengikuti hasil filter dan pengurutan di DataGrid.</p>
+            </div>
+            <button id="btnDownloadChart" type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 text-white hover:bg-slate-900">
+              Unduh Grafik (PNG)
+            </button>
+          </div>
+
+          <!-- Chart Config Form -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Tipe Grafik</label>
+              <select id="chartType" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+                <option value="bar">Bar Chart (Batang)</option>
+                <option value="horizontalBar">Horizontal Bar</option>
+                <option value="line">Line Chart (Garis)</option>
+                <option value="area">Area Chart</option>
+                <option value="doughnut">Doughnut Chart</option>
+                <option value="pie">Pie Chart</option>
+                <option value="polarArea">Polar Area Chart</option>
+                <option value="scatter">Scatter Plot (X vs Y)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Sumbu X (Kategori / Label)</label>
+              <select id="chartX" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white"></select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Sumbu Y (Nilai / Metrik)</label>
+              <select id="chartY" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white"></select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Agregasi Data</label>
+              <select id="chartAgg" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+                <option value="sum">Sum (Jumlahkan)</option>
+                <option value="avg">Average (Rata-rata)</option>
+                <option value="count">Count (Hitung Baris)</option>
+                <option value="max">Max (Nilai Tertinggi)</option>
+                <option value="min">Min (Nilai Terendah)</option>
+                <option value="none">Tanpa Agregasi (Baris Mentah)</option>
+              </select>
+            </div>
+
+            <div class="flex items-end">
+              <button id="btnRenderChart" type="button" class="w-full py-2 px-4 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                Perbarui Grafik
+              </button>
+            </div>
+          </div>
+
+          <div class="relative h-[420px] w-full bg-slate-50 rounded-xl p-4 border border-slate-200">
+            <canvas id="mainChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: LEAFLET THEMATIC POLYGON MAP -->
+      <section id="tabMap" class="tab-panel hidden space-y-5">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Peta Tematik & Overlay Poligon (Leaflet.js)</h3>
+              <p class="text-xs text-slate-500">Gradasi warna terang ke gelap otomatis menyesuaikan nilai metrik. Mendukung zona otomatis maupun file GeoJSON batas wilayah.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="mapMatchBadge" class="px-3 py-1 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                0 wilayah terpetakan
+              </span>
+              <label for="geojsonInput" class="cursor-pointer px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 text-white hover:bg-slate-900 transition">
+                + Upload GeoJSON Batas Wilayah
+              </label>
+              <input id="geojsonInput" type="file" accept=".geojson,.json,application/geo+json,application/json" class="hidden" />
+              <button id="btnClearGeojson" type="button" class="hidden px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">
+                Hapus GeoJSON
+              </button>
+            </div>
+          </div>
+
+          <!-- Custom GeoJSON Info Bar -->
+          <div id="geojsonBar" class="hidden bg-indigo-50/70 border border-indigo-200 rounded-lg px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-indigo-900">GeoJSON Aktif:</span>
+              <span id="geojsonFileName" class="font-mono text-indigo-700">batas_wilayah.geojson</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <label for="geojsonPropSelect" class="font-semibold text-indigo-900">Atribut Nama Wilayah di GeoJSON:</label>
+              <select id="geojsonPropSelect" class="px-2.5 py-1 border border-indigo-300 rounded bg-white text-slate-800 font-medium"></select>
+            </div>
+          </div>
+
+          <!-- Map Controls Row 1 -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Kolom Wilayah / Lokasi (CSV)</label>
+              <select id="mapGeoCol" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white"></select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Kolom Metrik (Intensitas Warna)</label>
+              <select id="mapMetricCol" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white"></select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Agregasi per Wilayah</label>
+              <select id="mapAgg" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+                <option value="sum">Sum (Total Nilai)</option>
+                <option value="avg">Average (Rata-rata)</option>
+                <option value="count">Count (Jumlah Data)</option>
+                <option value="max">Max (Tertinggi)</option>
+                <option value="min">Min (Terendah)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Mode Overlay Peta</label>
+              <select id="mapOverlayMode" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+                <option value="polygon">Poligon Tematik (Choropleth)</option>
+                <option value="both">Kombinasi (Poligon + Titik)</option>
+                <option value="circle">Titik Proporsional Saja</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Map Controls Row 2 -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Skema Warna (Terang &rarr; Gelap)</label>
+              <select id="mapPalette" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+                <option value="indigo">Biru Indigo (Terang &rarr; Gelap)</option>
+                <option value="emerald">Hijau Emerald (Terang &rarr; Gelap)</option>
+                <option value="ylorrd">Kuning &rarr; Oranye &rarr; Merah</option>
+                <option value="purple">Ungu Royal (Terang &rarr; Gelap)</option>
+                <option value="teal">Biru Laut / Teal (Terang &rarr; Gelap)</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+                <span>Kepekatan / Opasitas Warna</span>
+                <span id="opacityValLabel">75%</span>
+              </div>
+              <input id="mapOpacity" type="range" min="25" max="95" value="75" class="w-full accent-indigo-600 cursor-pointer" />
+            </div>
+
+            <div>
+              <button id="btnRenderMap" type="button" class="w-full py-2 px-4 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm">
+                Perbarui Peta Tematik
+              </button>
+            </div>
+          </div>
+
+          <div id="leafletMap" class="border border-slate-200"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // State Aplikasi
+      let rawData = [];
+      let headers = [];
+      let visibleCols = new Set();
+      let numericCols = new Set();
+      let typeOverrides = new Map(); // Manual type override: colName -> "Teks" | "Angka" | "Tanggal" | "Boolean"
+      let decimalMode = "dot"; // "dot" | "comma"
+      let table = null;
+      let chartInstance = null;
+      let mapInstance = null;
+      let polygonLayer = null;
+      let markerLayer = null;
+      let legendControl = null;
+      let customGeoJson = null;
+      let editedCellCount = 0;
+
+      // Skema Palet Warna Choropleth (5 Tingkat: Terang -> Gelap)
+      const COLOR_RAMPS = {
+        indigo: ["#e0e7ff", "#a5b4fc", "#6366f1", "#4338ca", "#1e1b4b"],
+        emerald: ["#d1fae5", "#6ee7b7", "#10b981", "#047857", "#064e3b"],
+        ylorrd: ["#fef9c3", "#fde047", "#fb923c", "#dc2626", "#7f1d1d"],
+        purple: ["#f3e8ff", "#d8b4fe", "#a855f7", "#7e22ce", "#3b0764"],
+        teal: ["#ccfbf1", "#5eead4", "#14b8a6", "#0f766e", "#134e4a"]
+      };
+
+      // Referensi Koordinat Kabupaten/Kota/Provinsi Indonesia
+      const ID_COORDS = {
+        "semarang": [-6.9667, 110.4167],
+        "kota semarang": [-6.9667, 110.4167],
+        "kab. semarang": [-7.1807, 110.4036],
+        "kabupaten semarang": [-7.1807, 110.4036],
+        "surakarta": [-7.5755, 110.8243],
+        "solo": [-7.5755, 110.8243],
+        "kota surakarta": [-7.5755, 110.8243],
+        "magelang": [-7.4797, 110.2177],
+        "kota magelang": [-7.4797, 110.2177],
+        "kab. magelang": [-7.5361, 110.2186],
+        "salatiga": [-7.3305, 110.5084],
+        "kota salatiga": [-7.3305, 110.5084],
+        "pekalongan": [-6.8886, 109.6753],
+        "kota pekalongan": [-6.8886, 109.6753],
+        "tegal": [-6.8797, 109.1256],
+        "kota tegal": [-6.8797, 109.1256],
+        "banyumas": [-7.4501, 109.1621],
+        "purwokerto": [-7.4243, 109.2302],
+        "cilacap": [-7.7279, 109.0059],
+        "purbalingga": [-7.3906, 109.3639],
+        "banjarnegara": [-7.3996, 109.6969],
+        "kebumen": [-7.6687, 109.6519],
+        "purworejo": [-7.7128, 110.0086],
+        "wonosobo": [-7.3632, 109.9002],
+        "temanggung": [-7.3164, 110.1753],
+        "kendal": [-6.9255, 110.2039],
+        "batang": [-6.9082, 109.7304],
+        "pemalang": [-6.8906, 109.3808],
+        "brebes": [-6.8711, 109.0372],
+        "kudus": [-6.8048, 110.8405],
+        "jepara": [-6.5888, 110.6684],
+        "demak": [-6.8948, 110.6384],
+        "grobogan": [-7.0268, 110.9225],
+        "purwodadi": [-7.0868, 110.9158],
+        "blora": [-6.9698, 111.4188],
+        "rembang": [-6.7086, 111.3417],
+        "pati": [-6.7559, 111.0380],
+        "sragen": [-7.4264, 111.0222],
+        "karanganyar": [-7.5961, 110.9508],
+        "wonogiri": [-7.8145, 110.9261],
+        "sukoharjo": [-7.6816, 110.8369],
+        "klaten": [-7.7058, 110.6064],
+        "boyolali": [-7.5331, 110.5956],
+        "yogyakarta": [-7.7956, 110.3695],
+        "sleman": [-7.7156, 110.3556],
+        "bantul": [-7.8881, 110.3289],
+        "kulon progo": [-7.8267, 110.1642],
+        "gunungkidul": [-7.9667, 110.6026],
+        "jakarta": [-6.2088, 106.8456],
+        "dki jakarta": [-6.2088, 106.8456],
+        "jakarta pusat": [-6.1865, 106.8341],
+        "jakarta selatan": [-6.2615, 106.8106],
+        "jakarta barat": [-6.1674, 106.7637],
+        "jakarta timur": [-6.2250, 106.9004],
+        "jakarta utara": [-6.1384, 106.8639],
+        "bandung": [-6.9175, 107.6191],
+        "bogor": [-6.5971, 106.8060],
+        "bekasi": [-6.2383, 106.9756],
+        "depok": [-6.4025, 106.7942],
+        "tangerang": [-6.1783, 106.6319],
+        "tangerang selatan": [-6.2886, 106.7179],
+        "cirebon": [-6.7320, 108.5523],
+        "tasikmalaya": [-7.3274, 108.2207],
+        "surabaya": [-7.2575, 112.7521],
+        "malang": [-7.9666, 112.6326],
+        "sidoarjo": [-7.4478, 112.7183],
+        "gresik": [-7.1566, 112.6555],
+        "kediri": [-7.8480, 112.0178],
+        "jember": [-8.1845, 113.6681],
+        "banyuwangi": [-8.2192, 114.3691],
+        "madiun": [-7.6298, 111.5239],
+        "denpasar": [-8.6705, 115.2126],
+        "badung": [-8.5819, 115.1771],
+        "medan": [3.5952, 98.6722],
+        "palembang": [-2.9761, 104.7754],
+        "bandar lampung": [-5.4292, 105.2610],
+        "pekanbaru": [0.5071, 101.4478],
+        "padang": [-0.9471, 100.4172],
+        "batam": [1.0456, 104.0305],
+        "makassar": [-5.1477, 119.4327],
+        "manado": [1.4748, 124.8421],
+        "balikpapan": [-1.2379, 116.8529],
+        "samarinda": [-0.5022, 117.1536],
+        "banjarmasin": [-3.3194, 114.5908],
+        "pontianak": [-0.0263, 109.3425],
+        "jayapura": [-2.5916, 140.6690],
+        "mataram": [-8.5833, 116.1167],
+        "kupang": [-10.1772, 123.6070],
+        "jawa tengah": [-7.1509, 110.1403],
+        "jawa barat": [-6.9147, 107.6098],
+        "jawa timur": [-7.5361, 112.2384]
+      };
+
+      // Data Contoh Bawaan (Menyertakan NIK_PIC & Kode_Wilayah sebagai contoh kolom kode numerik)
+      const SAMPLE_CSV = [
+        "Kode_Wilayah,NIK_PIC,Wilayah,Kategori_Usaha,Jumlah_Unit,Omzet_Juta,Pertumbuhan_Persen,Status",
+        "3374,3374011205880001,Kota Semarang,Kuliner,420,1850.5,12.4,Aktif",
+        "3372,3372032408910002,Kota Surakarta,Kriya & Batik,310,1420.75,10.8,Aktif",
+        "3302,3302150903850004,Kab. Banyumas,Kuliner,275,980.2,9.5,Aktif",
+        "3308,3308101711920001,Kab. Magelang,Pariwisata,195,840,14.2,Aktif",
+        "3319,3319020506870003,Kab. Kudus,Konveksi,260,1560.4,11.1,Aktif",
+        "3320,3320061402900002,Kab. Jepara,Mebel & Ukir,340,2150.8,8.7,Aktif",
+        "3301,3301212809840005,Kab. Cilacap,Perikanan,210,1120.25,7.9,Aktif",
+        "3326,3326131107890001,Kab. Pekalongan,Batik,290,1390,10.2,Aktif",
+        "3328,3328090304930002,Kab. Tegal,Logam & Manufaktur,185,1270.6,9.1,Aktif",
+        "3318,3318101912860004,Kab. Pati,Perikanan,230,1180.9,8.4,Aktif",
+        "3316,3316092201910003,Kab. Blora,Kehutanan & Kayu,145,690.5,6.8,Aktif",
+        "3373,3373021508940001,Kota Salatiga,Kuliner,160,760.3,13.5,Aktif",
+        "3310,3310240705880002,Kab. Klaten,Konveksi,240,1090,9.8,Aktif",
+        "3307,3307091310900001,Kab. Wonosobo,Agribisnis,175,810.45,11.6,Aktif",
+        "3329,3329092603870006,Kab. Brebes,Agribisnis,255,1340.15,10.5,Aktif"
+      ].join("\n");
+
+      // Helper: Toast Notification
+      function showToast(msg) {
+        const box = document.getElementById("toastBox");
+        box.textContent = msg;
+        box.classList.remove("hidden");
+        clearTimeout(box._timer);
+        box._timer = setTimeout(function () {
+          box.classList.add("hidden");
+        }, 3200);
+      }
+
+      // Helper: Normalisasi Nama Wilayah untuk Pencocokan CSV <-> GeoJSON / Koordinat
+      function normalizeRegionName(str) {
+        return String(str || "")
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim()
+          .replace(/^kabupaten\s+/, "")
+          .replace(/^kab\.?\s+/, "")
+          .replace(/^kota\s+adm\.?\s+/, "")
+          .replace(/^kota\s+/, "")
+          .replace(/^provinsi\s+/, "")
+          .replace(/^prov\.?\s+/, "")
+          .replace(/^daerah istimewa\s+/, "")
+          .trim();
+      }
+
+      // Helper: Parse Angka Cerdas (Titik & Koma)
+      function toNumber(val) {
+        if (val === null || val === undefined || val === "") return NaN;
+        if (typeof val === "number") return Number.isFinite(val) ? val : NaN;
+
+        let str = String(val).trim();
+        if (!str) return NaN;
+
+        str = str.replace(/[Rp$€£%\s]/g, "");
+        if (!/^[-+]?[0-9.,]+$/.test(str)) return NaN;
+
+        const hasDot = str.indexOf(".") !== -1;
+        const hasComma = str.indexOf(",") !== -1;
+
+        if (hasDot && hasComma) {
+          if (str.lastIndexOf(",") > str.lastIndexOf(".")) {
+            str = str.replace(/\./g, "").replace(",", ".");
+          } else {
+            str = str.replace(/,/g, "");
+          }
+        } else if (hasComma) {
+          const parts = str.split(",");
+          if (parts.length > 2) {
+            str = str.replace(/,/g, "");
+          } else if (decimalMode === "comma" || parts[1].length !== 3) {
+            str = str.replace(",", ".");
+          } else {
+            str = str.replace(",", "");
+          }
+        } else if (hasDot) {
+          const parts = str.split(".");
+          if (parts.length > 2) {
+            str = str.replace(/\./g, "");
+          } else if (decimalMode === "comma" && parts[1].length === 3 && parts[0] !== "0" && parts[0] !== "-0") {
+            str = str.replace(".", "");
+          }
+        }
+
+        const num = Number(str);
+        return Number.isFinite(num) ? num : NaN;
+      }
+
+      // Helper: Format Angka Sesuai Mode Desimal
+      function formatNumberDisplay(val, maxFrac) {
+        const num = toNumber(val);
+        if (Number.isNaN(num)) return val === null || val === undefined ? "" : String(val);
+        const locale = decimalMode === "comma" ? "id-ID" : "en-US";
+        return num.toLocaleString(locale, { maximumFractionDigits: maxFrac !== undefined ? maxFrac : 6 });
+      }
+
+      // Helper: Deteksi Tipe Kolom & Statistik (Memperhitungkan typeOverrides)
+      function profileColumns(rows, cols) {
+        numericCols.clear();
+
+        return cols.map(function (col) {
+          let empty = 0;
+          let numCount = 0;
+          let boolCount = 0;
+          let dateCount = 0;
+          const uniqueSet = new Set();
+          const nums = [];
+
+          rows.forEach(function (row) {
+            const val = row[col];
+            if (val === null || val === undefined || String(val).trim() === "") {
+              empty++;
+              return;
+            }
+            const str = String(val).trim();
+            uniqueSet.add(str);
+
+            const lower = str.toLowerCase();
+            const parsedNum = toNumber(str);
+
+            if (lower === "true" || lower === "false" || lower === "ya" || lower === "tidak") {
+              boolCount++;
+            } else if (!Number.isNaN(parsedNum)) {
+              numCount++;
+              nums.push(parsedNum);
+            } else if (/^\d{4}-\d{2}-\d{2}/.test(str) || /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(str)) {
+              dateCount++;
+            }
+          });
+
+          const nonEmpty = rows.length - empty;
+          let autoType = "Teks";
+          if (nonEmpty === 0) autoType = "Kosong";
+          else if (numCount / nonEmpty >= 0.8) autoType = "Angka";
+          else if (dateCount / nonEmpty >= 0.8) autoType = "Tanggal";
+          else if (boolCount / nonEmpty >= 0.8) autoType = "Boolean";
+
+          const isOverridden = typeOverrides.has(col);
+          const effectiveType = isOverridden ? typeOverrides.get(col) : autoType;
+
+          if (effectiveType === "Angka") {
+            numericCols.add(col);
+          }
+
+          let minVal = "-";
+          let maxVal = "-";
+          let avgVal = "-";
+
+          if (effectiveType === "Angka" && nums.length > 0) {
+            const min = Math.min.apply(null, nums);
+            const max = Math.max.apply(null, nums);
+            const sum = nums.reduce(function (a, b) { return a + b; }, 0);
+            const locale = decimalMode === "comma" ? "id-ID" : "en-US";
+            minVal = min.toLocaleString(locale, { maximumFractionDigits: 2 });
+            maxVal = max.toLocaleString(locale, { maximumFractionDigits: 2 });
+            avgVal = (sum / nums.length).toLocaleString(locale, { maximumFractionDigits: 2 });
+          }
+
+          return {
+            name: col,
+            type: effectiveType,
+            autoType: autoType,
+            isOverridden: isOverridden,
+            empty: empty,
+            unique: uniqueSet.size,
+            min: minVal,
+            avg: avgVal,
+            max: maxVal
+          };
+        });
+      }
+
+      // Terapkan Perubahan Tipe Kolom Secara Manual
+      function applyColumnTypeChange(colName, newType) {
+        if (!newType || newType === "auto") {
+          typeOverrides.delete(colName);
+        } else {
+          typeOverrides.set(colName, newType);
+        }
+
+        const activeRows = getActiveRows();
+        const profiles = renderProfiling(activeRows);
+        renderColumnCheckboxes(profiles);
+
+        if (table) {
+          const isNum = numericCols.has(colName);
+          table.updateColumnDefinition(colName, {
+            hozAlign: isNum ? "right" : "left",
+            sorter: isNum
+              ? function (a, b) {
+                  const na = toNumber(a);
+                  const nb = toNumber(b);
+                  if (Number.isNaN(na) && Number.isNaN(nb)) return 0;
+                  if (Number.isNaN(na)) return -1;
+                  if (Number.isNaN(nb)) return 1;
+                  return na - nb;
+                }
+              : "string"
+          });
+          table.redraw(true);
+        }
+
+        if (!document.getElementById("tabChart").classList.contains("hidden")) {
+          renderChart();
+        }
+        if (!document.getElementById("tabMap").classList.contains("hidden")) {
+          renderMap();
+        }
+
+        const activeProfile = profiles.find(function (p) { return p.name === colName; });
+        const labelType = activeProfile ? activeProfile.type : newType;
+        showToast("Kolom \"" + colName + "\" diatur sebagai " + labelType + ".");
+      }
+
+      // Render Tabel Profiling dengan Dropdown Ubah Tipe Data
+      function renderProfiling(rows) {
+        const profiles = profileColumns(rows, headers);
+        const tbody = document.getElementById("profileTableBody");
+        tbody.innerHTML = "";
+
+        profiles.forEach(function (p) {
+          const tr = document.createElement("tr");
+          tr.className = "hover:bg-slate-50";
+
+          const selectColor =
+            p.type === "Angka" ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
+            p.type === "Tanggal" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+            p.type === "Boolean" ? "bg-amber-50 text-amber-700 border-amber-200" :
+            "bg-slate-100 text-slate-700 border-slate-300";
+
+          // Kolom 1: Nama Kolom
+          const tdName = document.createElement("td");
+          tdName.className = "py-2.5 px-4 font-semibold text-slate-800";
+          tdName.textContent = p.name;
+          tr.appendChild(tdName);
+
+          // Kolom 2: Dropdown Tipe Data + Indikator Manual
+          const tdType = document.createElement("td");
+          tdType.className = "py-2 px-4";
+
+          const typeWrap = document.createElement("div");
+          typeWrap.className = "inline-flex items-center gap-1.5";
+
+          const select = document.createElement("select");
+          select.className = "px-2 py-1 text-[11px] font-semibold rounded border cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 " + selectColor;
+          select.title = "Ubah tipe data kolom " + p.name;
+
+          const typeOptions = ["Angka", "Teks", "Tanggal", "Boolean"];
+          if (p.type === "Kosong") typeOptions.push("Kosong");
+
+          typeOptions.forEach(function (optType) {
+            const opt = document.createElement("option");
+            opt.value = optType;
+            opt.textContent = optType;
+            if (p.type === optType) opt.selected = true;
+            select.appendChild(opt);
+          });
+
+          select.addEventListener("change", function () {
+            if (select.value === p.autoType) {
+              applyColumnTypeChange(p.name, "auto");
+            } else {
+              applyColumnTypeChange(p.name, select.value);
+            }
+          });
+
+          typeWrap.appendChild(select);
+
+          if (p.isOverridden) {
+            const resetBtn = document.createElement("button");
+            resetBtn.type = "button";
+            resetBtn.className = "px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100";
+            resetBtn.title = "Kembalikan ke deteksi otomatis (" + p.autoType + ")";
+            resetBtn.textContent = "Manual ↺";
+            resetBtn.addEventListener("click", function () {
+              applyColumnTypeChange(p.name, "auto");
+            });
+            typeWrap.appendChild(resetBtn);
+          }
+
+          tdType.appendChild(typeWrap);
+          tr.appendChild(tdType);
+
+          // Kolom 3-7: Kosong, Unik, Min, Rata-rata, Maks
+          const statCells = [
+            { text: String(p.empty), cls: "py-2.5 px-4 text-slate-600" },
+            { text: String(p.unique), cls: "py-2.5 px-4 text-slate-600" },
+            { text: p.min, cls: "py-2.5 px-4 font-mono text-slate-700" },
+            { text: p.avg, cls: "py-2.5 px-4 font-mono text-slate-700" },
+            { text: p.max, cls: "py-2.5 px-4 font-mono text-slate-700" }
+          ];
+
+          statCells.forEach(function (c) {
+            const td = document.createElement("td");
+            td.className = c.cls;
+            td.textContent = c.text;
+            tr.appendChild(td);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        return profiles;
+      }
+
+      // Render Checklist Kolom
+      function renderColumnCheckboxes(profiles) {
+        const list = document.getElementById("colCheckboxList");
+        list.innerHTML = "";
+
+        const typeMap = new Map();
+        profiles.forEach(function (p) { typeMap.set(p.name, p.type); });
+
+        headers.forEach(function (col) {
+          const label = document.createElement("label");
+          label.className = "flex items-center justify-between gap-2 text-xs text-slate-700 hover:bg-slate-50 px-2 py-1 rounded cursor-pointer";
+
+          const leftWrap = document.createElement("span");
+          leftWrap.className = "flex items-center gap-2 truncate";
+
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = visibleCols.has(col);
+          cb.className = "rounded border-slate-300 text-indigo-600 focus:ring-indigo-500";
+
+          cb.addEventListener("change", function () {
+            if (cb.checked) {
+              visibleCols.add(col);
+              if (table) table.showColumn(col);
+            } else {
+              if (visibleCols.size <= 1) {
+                cb.checked = true;
+                showToast("Minimal satu kolom harus tetap ditampilkan.");
+                return;
+              }
+              visibleCols.delete(col);
+              if (table) table.hideColumn(col);
+            }
+            updateColumnCounter();
+          });
+
+          const nameSpan = document.createElement("span");
+          nameSpan.className = "truncate font-medium";
+          nameSpan.textContent = col;
+
+          leftWrap.appendChild(cb);
+          leftWrap.appendChild(nameSpan);
+
+          const typeTag = document.createElement("span");
+          typeTag.className = "text-[10px] text-slate-400 shrink-0";
+          typeTag.textContent = typeMap.get(col) || "";
+
+          label.appendChild(leftWrap);
+          label.appendChild(typeTag);
+          list.appendChild(label);
+        });
+
+        updateColumnCounter();
+      }
+
+      function updateColumnCounter() {
+        const vis = visibleCols.size;
+        const tot = headers.length;
+        document.getElementById("colDropdownLabel").textContent = "Kolom (" + vis + "/" + tot + ")";
+        document.getElementById("statTotalCols").textContent = vis + " / " + tot;
+      }
+
+      function getVisibleHeaders() {
+        return headers.filter(function (h) { return visibleCols.has(h); });
+      }
+
+      function getActiveRows() {
+        if (!table) return rawData;
+        try {
+          const active = table.getData("active");
+          return Array.isArray(active) ? active : table.getData();
+        } catch (err) {
+          return table.getData();
+        }
+      }
+
+      function syncAllStats() {
+        const allRows = table ? table.getData() : rawData;
+        const activeRows = getActiveRows();
+
+        document.getElementById("statTotalRows").textContent = allRows.length.toLocaleString("id-ID");
+        document.getElementById("statActiveRows").textContent = activeRows.length.toLocaleString("id-ID");
+        updateColumnCounter();
+        document.getElementById("statEditedCells").textContent = editedCellCount.toLocaleString("id-ID");
+
+        const profiles = renderProfiling(activeRows);
+        renderColumnCheckboxes(profiles);
+
+        if (!document.getElementById("tabChart").classList.contains("hidden")) {
+          renderChart();
+        }
+        if (!document.getElementById("tabMap").classList.contains("hidden")) {
+          renderMap();
+        }
+      }
+
+      function populateColumnSelectors(profiles) {
+        const chartX = document.getElementById("chartX");
+        const chartY = document.getElementById("chartY");
+        const mapGeoCol = document.getElementById("mapGeoCol");
+        const mapMetricCol = document.getElementById("mapMetricCol");
+
+        [chartX, chartY, mapGeoCol, mapMetricCol].forEach(function (sel) {
+          sel.innerHTML = "";
+        });
+
+        headers.forEach(function (h) {
+          [chartX, chartY, mapGeoCol, mapMetricCol].forEach(function (sel) {
+            const opt = document.createElement("option");
+            opt.value = h;
+            opt.textContent = h;
+            sel.appendChild(opt);
+          });
+        });
+
+        const firstText = profiles.find(function (p) { return p.type === "Teks"; });
+        const firstNum = profiles.find(function (p) {
+          return p.type === "Angka" && !/nik|nip|kode|id|pos|telp|hp/i.test(p.name);
+        }) || profiles.find(function (p) { return p.type === "Angka"; });
+
+        const geoCandidate = profiles.find(function (p) {
+          return /wilayah|kota|kab|prov|lokasi|daerah|region|city/i.test(p.name) && !/kode/i.test(p.name);
+        });
+
+        if (geoCandidate) {
+          chartX.value = geoCandidate.name;
+          mapGeoCol.value = geoCandidate.name;
+        } else if (firstText) {
+          chartX.value = firstText.name;
+          mapGeoCol.value = firstText.name;
+        }
+
+        if (firstNum) {
+          chartY.value = firstNum.name;
+          mapMetricCol.value = firstNum.name;
+        }
+      }
+
+      function initDataGrid(rows) {
+        if (table) {
+          table.destroy();
+          table = null;
+        }
+
+        const columns = [
+          {
+            title: "#",
+            formatter: "rownum",
+            hozAlign: "center",
+            width: 55,
+            headerSort: false
+          }
+        ];
+
+        headers.forEach(function (h) {
+          const isNum = numericCols.has(h);
+          columns.push({
+            title: h,
+            field: h,
+            visible: visibleCols.has(h),
+            editor: "input",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Filter...",
+            hozAlign: isNum ? "right" : "left",
+            minWidth: 130,
+            sorter: isNum
+              ? function (a, b) {
+                  const na = toNumber(a);
+                  const nb = toNumber(b);
+                  if (Number.isNaN(na) && Number.isNaN(nb)) return 0;
+                  if (Number.isNaN(na)) return -1;
+                  if (Number.isNaN(nb)) return 1;
+                  return na - nb;
+                }
+              : "string",
+            formatter: function (cell) {
+              const val = cell.getValue();
+              if (val === null || val === undefined || val === "") return "";
+              if (numericCols.has(h)) {
+                return formatNumberDisplay(val);
+              }
+              return String(val);
+            }
+          });
+        });
+
+        columns.push({
+          title: "Aksi",
+          hozAlign: "center",
+          width: 75,
+          headerSort: false,
+          formatter: function () {
+            return "<span class='text-xs font-semibold text-rose-600 hover:underline cursor-pointer'>Hapus</span>";
+          },
+          cellClick: function (e, cell) {
+            cell.getRow().delete();
+            syncAllStats();
+            showToast("Baris dihapus.");
+          }
+        });
+
+        table = new Tabulator("#dataGrid", {
+          data: rows,
+          layout: "fitDataStretch",
+          pagination: "local",
+          paginationSize: 15,
+          paginationSizeSelector: [10, 15, 25, 50, 100],
+          movableColumns: true,
+          columns: columns
+        });
+
+        table.on("cellEdited", function (cell) {
+          cell.getElement().classList.add("cell-edited");
+          editedCellCount++;
+          syncAllStats();
+        });
+
+        table.on("dataFiltered", function () {
+          syncAllStats();
+        });
+
+        table.on("dataSorted", function () {
+          syncAllStats();
+        });
+      }
+
+      function setDecimalMode(mode) {
+        decimalMode = mode;
+
+        const btnDot = document.getElementById("btnDecDot");
+        const btnComma = document.getElementById("btnDecComma");
+
+        if (mode === "dot") {
+          btnDot.className = "px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-indigo-700 shadow-sm transition";
+          btnComma.className = "px-2.5 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition";
+        } else {
+          btnComma.className = "px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-indigo-700 shadow-sm transition";
+          btnDot.className = "px-2.5 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition";
+        }
+
+        if (table) {
+          table.redraw(true);
+        }
+        syncAllStats();
+        showToast("Format desimal diubah ke mode " + (mode === "comma" ? "Koma (1.234,5)" : "Titik (1,234.5)"));
+      }
+
+      function loadCsvText(csvText) {
+        if (!window.Papa) {
+          showToast("Library PapaParse belum termuat. Periksa koneksi internet.");
+          return;
+        }
+
+        const parsed = Papa.parse(csvText.trim(), {
+          header: true,
+          skipEmptyLines: true
+        });
+
+        if (!parsed.data || parsed.data.length === 0) {
+          showToast("File CSV kosong atau format tidak valid.");
+          return;
+        }
+
+        rawData = parsed.data;
+        headers = parsed.meta.fields || Object.keys(rawData[0]);
+        visibleCols = new Set(headers);
+        typeOverrides.clear();
+        editedCellCount = 0;
+
+        document.getElementById("workspace").classList.remove("hidden");
+        const profiles = renderProfiling(rawData);
+        renderColumnCheckboxes(profiles);
+        populateColumnSelectors(profiles);
+        initDataGrid(rawData);
+        syncAllStats();
+        showToast("Berhasil memuat " + rawData.length + " baris data.");
+      }
+
+      // Render Chart.js
+      function renderChart() {
+        if (!window.Chart) return;
+        const rows = getActiveRows();
+        const typeRaw = document.getElementById("chartType").value;
+        const xCol = document.getElementById("chartX").value;
+        const yCol = document.getElementById("chartY").value;
+        const agg = document.getElementById("chartAgg").value;
+
+        const ctx = document.getElementById("mainChart").getContext("2d");
+        if (chartInstance) {
+          chartInstance.destroy();
+          chartInstance = null;
+        }
+
+        let chartType = typeRaw;
+        let indexAxis = "x";
+        let fillArea = false;
+
+        if (typeRaw === "horizontalBar") {
+          chartType = "bar";
+          indexAxis = "y";
+        } else if (typeRaw === "area") {
+          chartType = "line";
+          fillArea = true;
+        }
+
+        const palette = [
+          "#4f46e5", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444",
+          "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1"
+        ];
+
+        if (chartType === "scatter") {
+          const scatterPoints = rows
+            .map(function (r) {
+              return { x: toNumber(r[xCol]), y: toNumber(r[yCol]) };
+            })
+            .filter(function (pt) {
+              return !Number.isNaN(pt.x) && !Number.isNaN(pt.y);
+            });
+
+          chartInstance = new Chart(ctx, {
+            type: "scatter",
+            data: {
+              datasets: [{
+                label: xCol + " vs " + yCol,
+                data: scatterPoints,
+                backgroundColor: "#4f46e5",
+                pointRadius: 5
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { title: { display: true, text: xCol } },
+                y: { title: { display: true, text: yCol } }
+              }
+            }
+          });
+          return;
+        }
+
+        let labels = [];
+        let values = [];
+
+        if (agg === "none") {
+          const slice = rows.slice(0, 50);
+          labels = slice.map(function (r) { return String(r[xCol] || "(Kosong)"); });
+          values = slice.map(function (r) {
+            const v = toNumber(r[yCol]);
+            return Number.isNaN(v) ? 0 : v;
+          });
+        } else {
+          const groups = new Map();
+          rows.forEach(function (r) {
+            const key = String(r[xCol] || "(Kosong)").trim();
+            const val = toNumber(r[yCol]);
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(Number.isNaN(val) ? 0 : val);
+          });
+
+          groups.forEach(function (arr, key) {
+            labels.push(key);
+            if (agg === "count") {
+              values.push(arr.length);
+            } else if (agg === "sum") {
+              values.push(arr.reduce(function (a, b) { return a + b; }, 0));
+            } else if (agg === "avg") {
+              values.push(arr.reduce(function (a, b) { return a + b; }, 0) / arr.length);
+            } else if (agg === "max") {
+              values.push(Math.max.apply(null, arr));
+            } else if (agg === "min") {
+              values.push(Math.min.apply(null, arr));
+            }
+          });
+        }
+
+        const isCircular = ["doughnut", "pie", "polarArea"].includes(chartType);
+
+        chartInstance = new Chart(ctx, {
+          type: chartType,
+          data: {
+            labels: labels,
+            datasets: [{
+              label: agg === "count" ? "Jumlah Baris" : (yCol + " (" + agg.toUpperCase() + ")"),
+              data: values,
+              backgroundColor: isCircular
+                ? labels.map(function (_, i) { return palette[i % palette.length]; })
+                : (fillArea ? "rgba(79, 70, 229, 0.2)" : "#4f46e5"),
+              borderColor: isCircular ? "#ffffff" : "#4f46e5",
+              borderWidth: 2,
+              fill: fillArea,
+              tension: 0.3
+            }]
+          },
+          options: {
+            indexAxis: indexAxis,
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: isCircular }
+            }
+          }
+        });
+      }
+
+      // =========================================================================
+      // PETA TEMATIK & POLIGON OVERLAY (CHOROPLETH + VORONOI + CUSTOM GEOJSON)
+      // =========================================================================
+
+      function getChoroplethColor(value, minVal, maxVal, paletteKey) {
+        const ramp = COLOR_RAMPS[paletteKey] || COLOR_RAMPS.indigo;
+        if (value === null || value === undefined || Number.isNaN(value)) {
+          return "#cbd5e1";
+        }
+        if (maxVal <= minVal) {
+          return ramp[2];
+        }
+        const ratio = Math.max(0, Math.min(1, (value - minVal) / (maxVal - minVal)));
+        const idx = Math.min(ramp.length - 1, Math.floor(ratio * ramp.length));
+        return ramp[idx];
+      }
+
+      function clipPolygonHalfPlane(poly, midLat, midLng, normLat, normLng) {
+        if (poly.length === 0) return [];
+        const output = [];
+
+        function isInside(pt) {
+          return (pt[0] - midLat) * normLat + (pt[1] - midLng) * normLng >= 0;
+        }
+
+        function intersect(p1, p2) {
+          const d1 = (p1[0] - midLat) * normLat + (p1[1] - midLng) * normLng;
+          const d2 = (p2[0] - midLat) * normLat + (p2[1] - midLng) * normLng;
+          const denom = d1 - d2;
+          if (Math.abs(denom) < 1e-12) return p1;
+          const t = d1 / denom;
+          return [
+            p1[0] + t * (p2[0] - p1[0]),
+            p1[1] + t * (p2[1] - p1[1])
+          ];
+        }
+
+        for (let i = 0; i < poly.length; i++) {
+          const curr = poly[i];
+          const prev = poly[(i + poly.length - 1) % poly.length];
+          const currIn = isInside(curr);
+          const prevIn = isInside(prev);
+
+          if (currIn) {
+            if (!prevIn) output.push(intersect(prev, curr));
+            output.push(curr);
+          } else if (prevIn) {
+            output.push(intersect(prev, curr));
+          }
+        }
+        return output;
+      }
+
+      function buildVoronoiRegionPolygons(items) {
+        if (items.length === 0) return [];
+
+        let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+        items.forEach(function (it) {
+          if (it.coords[0] < minLat) minLat = it.coords[0];
+          if (it.coords[0] > maxLat) maxLat = it.coords[0];
+          if (it.coords[1] < minLng) minLng = it.coords[1];
+          if (it.coords[1] > maxLng) maxLng = it.coords[1];
+        });
+
+        const pad = 0.65;
+        const box = [
+          [minLat - pad, minLng - pad],
+          [minLat - pad, maxLng + pad],
+          [maxLat + pad, maxLng + pad],
+          [maxLat + pad, minLng - pad]
+        ];
+
+        const maxRadiusDeg = 0.48;
+        const sides = 12;
+
+        return items.map(function (target, i) {
+          let cell = [];
+          for (let s = 0; s < sides; s++) {
+            const angle = (2 * Math.PI * s) / sides;
+            cell.push([
+              target.coords[0] + maxRadiusDeg * Math.sin(angle),
+              target.coords[1] + maxRadiusDeg * Math.cos(angle) * 1.05
+            ]);
+          }
+
+          cell = clipPolygonHalfPlane(cell, box[0][0], box[0][1], 1, 0);
+          cell = clipPolygonHalfPlane(cell, box[2][0], box[2][1], -1, 0);
+          cell = clipPolygonHalfPlane(cell, box[0][0], box[0][1], 0, 1);
+          cell = clipPolygonHalfPlane(cell, box[2][0], box[2][1], 0, -1);
+
+          for (let j = 0; j < items.length; j++) {
+            if (i === j) continue;
+            const other = items[j];
+            const midLat = (target.coords[0] + other.coords[0]) / 2;
+            const midLng = (target.coords[1] + other.coords[1]) / 2;
+            const normLat = target.coords[0] - other.coords[0];
+            const normLng = target.coords[1] - other.coords[1];
+            cell = clipPolygonHalfPlane(cell, midLat, midLng, normLat, normLng);
+            if (cell.length < 3) break;
+          }
+
+          return {
+            item: target,
+            latlngs: cell
+          };
+        });
+      }
+
+      function aggregateByRegion(rows, geoCol, metricCol, aggMode) {
+        const latKey = headers.find(function (h) { return /^lat(itude)?$/i.test(h.trim()); });
+        const lonKey = headers.find(function (h) { return /^(lon|lng|longitude)$/i.test(h.trim()); });
+        const grouped = new Map();
+
+        rows.forEach(function (row) {
+          const rawLabel = String(row[geoCol] || "").trim();
+          if (!rawLabel) return;
+
+          const normKey = normalizeRegionName(rawLabel);
+          if (!grouped.has(normKey)) {
+            let coords = null;
+            if (latKey && lonKey) {
+              const lat = toNumber(row[latKey]);
+              const lon = toNumber(row[lonKey]);
+              if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+                coords = [lat, lon];
+              }
+            }
+            if (!coords) {
+              const rawLower = rawLabel.toLowerCase();
+              coords = ID_COORDS[rawLower] || ID_COORDS[normKey] || null;
+            }
+
+            grouped.set(normKey, {
+              normKey: normKey,
+              label: rawLabel,
+              coords: coords,
+              values: [],
+              sampleRow: row,
+              rowCount: 0
+            });
+          }
+
+          const entry = grouped.get(normKey);
+          entry.rowCount++;
+          const num = toNumber(row[metricCol]);
+          if (!Number.isNaN(num)) {
+            entry.values.push(num);
+          }
+        });
+
+        const result = [];
+        grouped.forEach(function (entry) {
+          let aggVal = 0;
+          if (aggMode === "count") {
+            aggVal = entry.rowCount;
+          } else if (entry.values.length > 0) {
+            if (aggMode === "sum") {
+              aggVal = entry.values.reduce(function (a, b) { return a + b; }, 0);
+            } else if (aggMode === "avg") {
+              aggVal = entry.values.reduce(function (a, b) { return a + b; }, 0) / entry.values.length;
+            } else if (aggMode === "max") {
+              aggVal = Math.max.apply(null, entry.values);
+            } else if (aggMode === "min") {
+              aggVal = Math.min.apply(null, entry.values);
+            }
+          }
+          entry.metricValue = aggVal;
+          result.push(entry);
+        });
+
+        return result;
+      }
+
+      function buildRegionPopup(title, metricCol, aggMode, item) {
+        const div = document.createElement("div");
+        div.className = "text-xs space-y-1.5 min-w-[180px]";
+
+        const headerEl = document.createElement("div");
+        headerEl.className = "font-bold text-sm text-slate-900 border-b border-slate-200 pb-1";
+        headerEl.textContent = title;
+        div.appendChild(headerEl);
+
+        if (item) {
+          const metricLine = document.createElement("div");
+          metricLine.className = "bg-indigo-50 text-indigo-900 px-2 py-1 rounded font-semibold";
+          const labelMetric = aggMode === "count" ? "Jumlah Baris" : (metricCol + " (" + aggMode.toUpperCase() + ")");
+          metricLine.textContent = labelMetric + ": " + formatNumberDisplay(item.metricValue, 2);
+          div.appendChild(metricLine);
+
+          if (item.rowCount > 1) {
+            const countNote = document.createElement("div");
+            countNote.className = "text-[11px] text-slate-500";
+            countNote.textContent = "Terdapat " + item.rowCount + " baris data pada wilayah ini.";
+            div.appendChild(countNote);
+          } else if (item.sampleRow) {
+            getVisibleHeaders().forEach(function (h) {
+              const line = document.createElement("div");
+              const b = document.createElement("strong");
+              b.textContent = h + ": ";
+              line.appendChild(b);
+              const valStr = numericCols.has(h) ? formatNumberDisplay(item.sampleRow[h]) : String(item.sampleRow[h] || "-");
+              line.appendChild(document.createTextNode(valStr));
+              div.appendChild(line);
+            });
+          }
+        } else {
+          const emptyNote = document.createElement("div");
+          emptyNote.className = "text-slate-500 italic";
+          emptyNote.textContent = "Tidak ada data pada filter CSV aktif.";
+          div.appendChild(emptyNote);
+        }
+
+        return div;
+      }
+
+      function updateMapLegend(minVal, maxVal, metricCol, aggMode, paletteKey) {
+        if (legendControl) {
+          legendControl.remove();
+          legendControl = null;
+        }
+
+        legendControl = L.control({ position: "bottomright" });
+        legendControl.onAdd = function () {
+          const div = L.DomUtil.create("div", "leaflet-legend");
+          const ramp = COLOR_RAMPS[paletteKey] || COLOR_RAMPS.indigo;
+          const titleText = aggMode === "count" ? "Jumlah Baris" : (metricCol + " (" + aggMode.toUpperCase() + ")");
+
+          const titleDiv = document.createElement("div");
+          titleDiv.className = "font-bold text-slate-800 mb-1.5";
+          titleDiv.textContent = titleText;
+          div.appendChild(titleDiv);
+
+          const step = (maxVal - minVal) / ramp.length;
+
+          ramp.forEach(function (color, i) {
+            const row = document.createElement("div");
+            row.className = "flex items-center gap-2 my-0.5";
+
+            const swatch = document.createElement("span");
+            swatch.style.backgroundColor = color;
+            swatch.style.width = "14px";
+            swatch.style.height = "14px";
+            swatch.style.display = "inline-block";
+            swatch.style.borderRadius = "3px";
+            swatch.style.border = "1px solid rgba(15,23,42,0.2)";
+
+            const label = document.createElement("span");
+            if (maxVal <= minVal) {
+              label.textContent = formatNumberDisplay(minVal, 2);
+            } else {
+              const low = minVal + step * i;
+              const high = i === ramp.length - 1 ? maxVal : minVal + step * (i + 1);
+              label.textContent = formatNumberDisplay(low, 1) + " – " + formatNumberDisplay(high, 1);
+            }
+
+            row.appendChild(swatch);
+            row.appendChild(label);
+            div.appendChild(row);
+          });
+
+          return div;
+        };
+
+        legendControl.addTo(mapInstance);
+      }
+
+      function renderMap() {
+        if (!window.L) return;
+
+        if (!mapInstance) {
+          mapInstance = L.map("leafletMap").setView([-7.15, 110.14], 8);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 18,
+            attribution: "&copy; OpenStreetMap"
+          }).addTo(mapInstance);
+          polygonLayer = L.layerGroup().addTo(mapInstance);
+          markerLayer = L.layerGroup().addTo(mapInstance);
+        }
+
+        setTimeout(function () {
+          mapInstance.invalidateSize();
+        }, 120);
+
+        polygonLayer.clearLayers();
+        markerLayer.clearLayers();
+
+        const rows = getActiveRows();
+        const geoCol = document.getElementById("mapGeoCol").value;
+        const metricCol = document.getElementById("mapMetricCol").value;
+        const aggMode = document.getElementById("mapAgg").value;
+        const overlayMode = document.getElementById("mapOverlayMode").value;
+        const paletteKey = document.getElementById("mapPalette").value;
+        const fillOpacity = Number(document.getElementById("mapOpacity").value) / 100;
+
+        const aggregatedItems = aggregateByRegion(rows, geoCol, metricCol, aggMode);
+        const itemByNormKey = new Map();
+        aggregatedItems.forEach(function (it) {
+          itemByNormKey.set(it.normKey, it);
+        });
+
+        const metricValues = aggregatedItems.map(function (it) { return it.metricValue; });
+        const minVal = metricValues.length > 0 ? Math.min.apply(null, metricValues) : 0;
+        const maxVal = metricValues.length > 0 ? Math.max.apply(null, metricValues) : 1;
+
+        const showPolygons = overlayMode === "polygon" || overlayMode === "both";
+        const showCircles = overlayMode === "circle" || overlayMode === "both";
+
+        let matchedCount = 0;
+        const allBounds = [];
+
+        if (customGeoJson && showPolygons) {
+          const propKey = document.getElementById("geojsonPropSelect").value;
+
+          const geoLayer = L.geoJSON(customGeoJson, {
+            style: function (feature) {
+              const rawProp = feature && feature.properties ? feature.properties[propKey] : "";
+              const norm = normalizeRegionName(rawProp);
+              const matchedItem = itemByNormKey.get(norm);
+
+              if (matchedItem) {
+                matchedCount++;
+                return {
+                  fillColor: getChoroplethColor(matchedItem.metricValue, minVal, maxVal, paletteKey),
+                  weight: 1.5,
+                  opacity: 1,
+                  color: "#ffffff",
+                  fillOpacity: fillOpacity
+                };
+              }
+              return {
+                fillColor: "#e2e8f0",
+                weight: 1,
+                opacity: 0.8,
+                color: "#94a3b8",
+                fillOpacity: 0.25
+              };
+            },
+            onEachFeature: function (feature, layer) {
+              const rawProp = feature && feature.properties ? String(feature.properties[propKey] || "Wilayah") : "Wilayah";
+              const norm = normalizeRegionName(rawProp);
+              const matchedItem = itemByNormKey.get(norm);
+
+              const tooltipText = matchedItem
+                ? (rawProp + " — " + formatNumberDisplay(matchedItem.metricValue, 2))
+                : (rawProp + " (Tanpa data)");
+              layer.bindTooltip(tooltipText, { sticky: true });
+              layer.bindPopup(buildRegionPopup(rawProp, metricCol, aggMode, matchedItem));
+
+              layer.on("mouseover", function () {
+                layer.setStyle({ weight: 3, color: "#0f172a" });
+                if (layer.bringToFront) layer.bringToFront();
+              });
+              layer.on("mouseout", function () {
+                geoLayer.resetStyle(layer);
+              });
+            }
+          });
+
+          geoLayer.addTo(polygonLayer);
+          const gBounds = geoLayer.getBounds();
+          if (gBounds && gBounds.isValid()) {
+            mapInstance.fitBounds(gBounds, { padding: [25, 25] });
+          }
+        } else {
+          const coordItems = aggregatedItems.filter(function (it) { return Array.isArray(it.coords); });
+          matchedCount = coordItems.length;
+
+          if (showPolygons && coordItems.length > 0) {
+            const cells = buildVoronoiRegionPolygons(coordItems);
+
+            cells.forEach(function (cellObj) {
+              if (cellObj.latlngs.length < 3) return;
+              const it = cellObj.item;
+              const color = getChoroplethColor(it.metricValue, minVal, maxVal, paletteKey);
+
+              const poly = L.polygon(cellObj.latlngs, {
+                fillColor: color,
+                fillOpacity: fillOpacity,
+                color: "#ffffff",
+                weight: 2,
+                opacity: 0.95
+              });
+
+              poly.bindTooltip(
+                it.label + " — " + formatNumberDisplay(it.metricValue, 2),
+                { sticky: true }
+              );
+              poly.bindPopup(buildRegionPopup(it.label, metricCol, aggMode, it));
+
+              poly.on("mouseover", function () {
+                poly.setStyle({ weight: 3, color: "#0f172a", fillOpacity: Math.min(0.95, fillOpacity + 0.12) });
+                if (poly.bringToFront) poly.bringToFront();
+              });
+              poly.on("mouseout", function () {
+                poly.setStyle({ weight: 2, color: "#ffffff", fillOpacity: fillOpacity });
+              });
+
+              poly.addTo(polygonLayer);
+              cellObj.latlngs.forEach(function (pt) { allBounds.push(pt); });
+            });
+          }
+
+          if (showCircles) {
+            coordItems.forEach(function (it) {
+              allBounds.push(it.coords);
+              const ratio = maxVal > minVal
+                ? Math.max(0.2, (it.metricValue - minVal) / (maxVal - minVal))
+                : 0.5;
+              const radius = Math.round(7 + ratio * 16);
+              const color = getChoroplethColor(it.metricValue, minVal, maxVal, paletteKey);
+
+              const circle = L.circleMarker(it.coords, {
+                radius: radius,
+                fillColor: overlayMode === "both" ? "#0f172a" : color,
+                color: "#ffffff",
+                weight: 2,
+                fillOpacity: 0.85
+              });
+
+              circle.bindTooltip(it.label + " — " + formatNumberDisplay(it.metricValue, 2));
+              circle.bindPopup(buildRegionPopup(it.label, metricCol, aggMode, it));
+              circle.addTo(markerLayer);
+            });
+          }
+
+          if (allBounds.length > 0) {
+            mapInstance.fitBounds(allBounds, { padding: [30, 30], maxZoom: 10 });
+          }
+        }
+
+        document.getElementById("mapMatchBadge").textContent =
+          matchedCount + " dari " + aggregatedItems.length + " wilayah terpetakan";
+
+        updateMapLegend(minVal, maxVal, metricCol, aggMode, paletteKey);
+      }
+
+      // Switch Tab Helper
+      function activateTab(tabId) {
+        document.querySelectorAll(".tab-panel").forEach(function (panel) {
+          panel.classList.add("hidden");
+        });
+        document.getElementById(tabId).classList.remove("hidden");
+
+        document.querySelectorAll(".tab-btn").forEach(function (btn) {
+          if (btn.getAttribute("data-tab") === tabId) {
+            btn.className = "tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white shadow-sm";
+          } else {
+            btn.className = "tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-100";
+          }
+        });
+
+        if (tabId === "tabChart") renderChart();
+        if (tabId === "tabMap") renderMap();
+      }
+
+      // Siapkan Data Baris untuk Ekspor
+      function buildExportRows(useNativeNumbersForExcel) {
+        const rows = getActiveRows();
+        const cols = getVisibleHeaders();
+
+        return rows.map(function (r) {
+          const obj = {};
+          cols.forEach(function (col) {
+            const rawVal = r[col];
+            if (numericCols.has(col)) {
+              const num = toNumber(rawVal);
+              if (!Number.isNaN(num)) {
+                obj[col] = useNativeNumbersForExcel ? num : formatNumberDisplay(num);
+                return;
+              }
+            }
+            obj[col] = rawVal === null || rawVal === undefined ? "" : String(rawVal);
+          });
+          return obj;
+        });
+      }
+
+      // Event Bindings saat DOM Siap
+      document.addEventListener("DOMContentLoaded", function () {
+        const csvInput = document.getElementById("csvInput");
+        const dropZone = document.getElementById("dropZone");
+
+        // File Picker CSV
+        csvInput.addEventListener("change", function (e) {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = function (ev) { loadCsvText(ev.target.result); };
+          reader.readAsText(file);
+        });
+
+        // Drag & Drop CSV
+        dropZone.addEventListener("click", function () { csvInput.click(); });
+        dropZone.addEventListener("dragover", function (e) {
+          e.preventDefault();
+          dropZone.classList.add("border-indigo-500", "bg-indigo-50/40");
+        });
+        dropZone.addEventListener("dragleave", function () {
+          dropZone.classList.remove("border-indigo-500", "bg-indigo-50/40");
+        });
+        dropZone.addEventListener("drop", function (e) {
+          e.preventDefault();
+          dropZone.classList.remove("border-indigo-500", "bg-indigo-50/40");
+          const file = e.dataTransfer.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = function (ev) { loadCsvText(ev.target.result); };
+          reader.readAsText(file);
+        });
+
+        // Sample Data
+        document.getElementById("btnSample").addEventListener("click", function () {
+          loadCsvText(SAMPLE_CSV);
+        });
+
+        // Decimal Mode Toggles
+        document.getElementById("btnDecDot").addEventListener("click", function () {
+          setDecimalMode("dot");
+        });
+        document.getElementById("btnDecComma").addEventListener("click", function () {
+          setDecimalMode("comma");
+        });
+
+        // Column Visibility Dropdown
+        const btnColDropdown = document.getElementById("btnColDropdown");
+        const colDropdownMenu = document.getElementById("colDropdownMenu");
+        const colDropdownWrapper = document.getElementById("colDropdownWrapper");
+
+        btnColDropdown.addEventListener("click", function (e) {
+          e.stopPropagation();
+          colDropdownMenu.classList.toggle("hidden");
+        });
+
+        document.addEventListener("click", function (e) {
+          if (!colDropdownWrapper.contains(e.target)) {
+            colDropdownMenu.classList.add("hidden");
+          }
+        });
+
+        document.getElementById("btnShowAllCols").addEventListener("click", function () {
+          headers.forEach(function (col) {
+            visibleCols.add(col);
+            if (table) table.showColumn(col);
+          });
+          document.querySelectorAll("#colCheckboxList input[type='checkbox']").forEach(function (cb) {
+            cb.checked = true;
+          });
+          updateColumnCounter();
+          showToast("Semua kolom ditampilkan.");
+        });
+
+        // Tab Switching
+        document.querySelectorAll(".tab-btn").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            activateTab(btn.getAttribute("data-tab"));
+          });
+        });
+
+        document.getElementById("btnJumpVisualize").addEventListener("click", function () {
+          activateTab("tabChart");
+        });
+
+        // Toggle Profiling
+        document.getElementById("btnToggleProfile").addEventListener("click", function () {
+          const box = document.getElementById("profileContainer");
+          const isHidden = box.classList.toggle("hidden");
+          this.textContent = isHidden ? "Tampilkan" : "Sembunyikan";
+        });
+
+        // Global Search
+        document.getElementById("globalSearch").addEventListener("input", function (e) {
+          if (!table) return;
+          const q = e.target.value.trim().toLowerCase();
+          if (!q) {
+            table.clearFilter();
+            return;
+          }
+          table.setFilter(function (rowData) {
+            return getVisibleHeaders().some(function (h) {
+              return String(rowData[h] || "").toLowerCase().includes(q);
+            });
+          });
+        });
+
+        // Reset Filters
+        document.getElementById("btnResetFilter").addEventListener("click", function () {
+          if (!table) return;
+          document.getElementById("globalSearch").value = "";
+          table.clearFilter(true);
+          table.clearSort();
+          syncAllStats();
+          showToast("Semua filter dan pengurutan direset.");
+        });
+
+        // Add Row
+        document.getElementById("btnAddRow").addEventListener("click", function () {
+          if (!table) return;
+          const newRow = {};
+          headers.forEach(function (h) { newRow[h] = ""; });
+          table.addRow(newRow, true);
+          syncAllStats();
+          showToast("Baris kosong ditambahkan di bagian atas.");
+        });
+
+        // Copy to Clipboard
+        document.getElementById("btnCopyClipboard").addEventListener("click", function () {
+          const cols = getVisibleHeaders();
+          const exportRows = buildExportRows(false);
+          const lines = [cols.join("\t")];
+          exportRows.forEach(function (r) {
+            lines.push(cols.map(function (h) { return String(r[h] || "").replace(/\t/g, " "); }).join("\t"));
+          });
+          navigator.clipboard.writeText(lines.join("\n")).then(function () {
+            showToast("Tabel aktif (" + cols.length + " kolom) disalin ke clipboard!");
+          }).catch(function () {
+            showToast("Gagal menyalin otomatis. Gunakan tombol Ekspor.");
+          });
+        });
+
+        // Export Excel (.xlsx)
+        document.getElementById("btnExportXlsx").addEventListener("click", function () {
+          if (!window.XLSX) return;
+          const cols = getVisibleHeaders();
+          const exportRows = buildExportRows(true);
+          const ws = XLSX.utils.json_to_sheet(exportRows, { header: cols });
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Data_Hasil");
+          XLSX.writeFile(wb, "datapulse-export.xlsx");
+          showToast("File Excel (.xlsx) berhasil diunduh.");
+        });
+
+        // Export JSON
+        document.getElementById("btnExportJson").addEventListener("click", function () {
+          const exportRows = buildExportRows(true);
+          const blob = new Blob([JSON.stringify(exportRows, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "datapulse-export.json";
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast("File JSON berhasil diunduh.");
+        });
+
+        // Export CSV
+        document.getElementById("btnExportCsv").addEventListener("click", function () {
+          if (!window.Papa) return;
+          const cols = getVisibleHeaders();
+          const exportRows = buildExportRows(false);
+          const csvOut = Papa.unparse(exportRows, { columns: cols });
+          const blob = new Blob([csvOut], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "datapulse-export.csv";
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast("File CSV berhasil diunduh.");
+        });
+
+        // Chart Controls
+        document.getElementById("btnRenderChart").addEventListener("click", renderChart);
+        document.getElementById("btnDownloadChart").addEventListener("click", function () {
+          const canvas = document.getElementById("mainChart");
+          const a = document.createElement("a");
+          a.href = canvas.toDataURL("image/png");
+          a.download = "grafik-datapulse.png";
+          a.click();
+        });
+
+        // Map Controls & Opacity Slider
+        const opacitySlider = document.getElementById("mapOpacity");
+        opacitySlider.addEventListener("input", function () {
+          document.getElementById("opacityValLabel").textContent = opacitySlider.value + "%";
+        });
+        opacitySlider.addEventListener("change", renderMap);
+
+        ["mapGeoCol", "mapMetricCol", "mapAgg", "mapOverlayMode", "mapPalette"].forEach(function (id) {
+          document.getElementById(id).addEventListener("change", renderMap);
+        });
+        document.getElementById("btnRenderMap").addEventListener("click", renderMap);
+
+        // Upload Custom GeoJSON Batas Wilayah
+        const geojsonInput = document.getElementById("geojsonInput");
+        const btnClearGeojson = document.getElementById("btnClearGeojson");
+        const geojsonBar = document.getElementById("geojsonBar");
+        const geojsonPropSelect = document.getElementById("geojsonPropSelect");
+
+        geojsonInput.addEventListener("change", function (e) {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = function (ev) {
+            try {
+              const parsed = JSON.parse(ev.target.result);
+              if (!parsed || !parsed.features || !Array.isArray(parsed.features) || parsed.features.length === 0) {
+                showToast("File GeoJSON tidak valid atau tidak memiliki features.");
+                return;
+              }
+              customGeoJson = parsed;
+              document.getElementById("geojsonFileName").textContent = file.name;
+              geojsonBar.classList.remove("hidden");
+              btnClearGeojson.classList.remove("hidden");
+
+              const sampleProps = parsed.features[0].properties || {};
+              const propKeys = Object.keys(sampleProps);
+              geojsonPropSelect.innerHTML = "";
+              propKeys.forEach(function (k) {
+                const opt = document.createElement("option");
+                opt.value = k;
+                opt.textContent = k;
+                geojsonPropSelect.appendChild(opt);
+              });
+
+              const bestProp = propKeys.find(function (k) {
+                return /wadmkk|wadmpr|kab|kota|prov|name|nama|wilayah|region|district/i.test(k);
+              });
+              if (bestProp) geojsonPropSelect.value = bestProp;
+
+              renderMap();
+              showToast("GeoJSON batas wilayah berhasil dimuat (" + parsed.features.length + " poligon).");
+            } catch (err) {
+              showToast("Gagal membaca file JSON/GeoJSON.");
+            }
+          };
+          reader.readAsText(file);
+        });
+
+        geojsonPropSelect.addEventListener("change", renderMap);
+
+        btnClearGeojson.addEventListener("click", function () {
+          customGeoJson = null;
+          geojsonInput.value = "";
+          geojsonBar.classList.add("hidden");
+          btnClearGeojson.classList.add("hidden");
+          renderMap();
+          showToast("GeoJSON dihapus, kembali ke poligon zona otomatis.");
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
